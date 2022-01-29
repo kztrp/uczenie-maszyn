@@ -6,10 +6,11 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import VotingClassifier
 
 class Individual:
     def __init__(self, n_features, data):
-        self.genotype_features = np.zeros(n_features)
+        self.genotype_features = np.zeros((3, n_features))
         self.genotype_algorithms = np.zeros(3)
         self.scores = np.zeros(3)
         self.fitness_scores = np.zeros(5)
@@ -32,23 +33,24 @@ class Individual:
             , {self.scores}, {self.fitness_scores}, {self.iteration})"
 
     def generate_genotype(self):
-        self.genotype_features = np.random.randint(0, 2, len(self.genotype_features))
-        self.genotype_algorithms = np.random.randint(0, 2, len(self.genotype_algorithms))
+        self.genotype_features = np.random.randint(0, 2, self.genotype_features.shape)
+        self.genotype_algorithms = np.random.randint(0, 2, self.genotype_algorithms.shape)
         while np.nonzero(self.genotype_features)[0].size == 0:
-            self.genotype_features = np.random.randint(0, 2, len(self.genotype_features))
+            self.genotype_features = np.random.randint(0, 2, self.genotype_features.shape)
         while np.nonzero(self.genotype_algorithms)[0].size == 0:
-            self.genotype_algorithms = np.random.randint(0, 2, len(self.genotype_algorithms))
+            self.genotype_algorithms = np.random.randint(0, 2, self.genotype_algorithms.shape)
         self.calculate_score()
 
     def calculate_score(self):
         clfs = (GaussianNB(), KNeighborsClassifier(n_neighbors=7), LinearDiscriminantAnalysis())
-        features = np.nonzero(self.genotype_features)[0]
-        X = self.data[:, features]
-        y = self.data[:, -1]
-        sc = StandardScaler()
-        X = sc.fit_transform(X)
+
         for i, alg in enumerate(self.genotype_algorithms):
             if alg == 1:
+                features = np.nonzero(self.genotype_features[i])[0]
+                X = self.data[:, features]
+                y = self.data[:, -1]
+                sc = StandardScaler()
+                X = sc.fit_transform(X)
                 skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=1234)
                 scores = []
                 for train_index, test_index in skf.split(X, y):
@@ -66,28 +68,63 @@ class Individual:
             self.fitness_scores[4] = np.median(self.scores[np.nonzero(self.scores)])
 
 
-
     def breeding(self, ind_a, ind_b, mutation_rate, split_points):
-        for i in range(len(self.genotype_features)):
-            if i < split_points[0]:
-                self.genotype_features[i] = ind_a.genotype_features[i]
-            else:
-                self.genotype_features[i] = ind_b.genotype_features[i]
+        for j in range(3):
+            for i in range(len(self.genotype_features[j])):
+                if i < split_points[0]:
+                    self.genotype_features[j][i] = ind_a.genotype_features[j][i]
+                else:
+                    self.genotype_features[j][i] = ind_b.genotype_features[j][i]
         for i in range(len(self.genotype_algorithms)):
             if i < split_points[1]:
                 self.genotype_algorithms[i] = ind_a.genotype_algorithms[i]
             else:
                 self.genotype_algorithms[i] = ind_b.genotype_algorithms[i]
         self.mutate(mutation_rate)
-        if np.nonzero(self.genotype_features)[0].size == 0:
-            r = random.randint(0, self.genotype_features.size-1)
-            self.genotype_features[r] = 1
+        for i in range(3):
+            if np.nonzero(self.genotype_features[i])[0].size == 0:
+                r = random.randint(0, self.genotype_features[i].size-1)
+                self.genotype_features[i][r] = 1
         self.calculate_score()
 
     def mutate(self, mutation_rate):
-        for i in range(len(self.genotype_features)):
-            if random.uniform(0, 1) <  mutation_rate:
-                self.genotype_features[i] = random.randint(0, 1)
+        for j in range(3):
+            for i in range(len(self.genotype_features[j])):
+                if random.uniform(0, 1) <  mutation_rate:
+                    self.genotype_features[j][i] = random.randint(0, 1)
         for i in range(len(self.genotype_algorithms)):
             if random.uniform(0, 1) <  mutation_rate:
                 self.genotype_algorithms[i] = random.randint(0, 1)
+
+    def calculate_combined(self):
+        clfs = (GaussianNB(), KNeighborsClassifier(n_neighbors=7), LinearDiscriminantAnalysis())
+        features = np.nonzero(self.genotype_features[0])[0]
+        X = self.data[:, features]
+        y = self.data[:, -1]
+        sc = StandardScaler()
+        X = sc.fit_transform(X)
+        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=1234)
+        clf = VotingClassifier(estimators=[('nb', clfs[0]), ('knn', clfs[1]), ('lda', clfs[2])])
+        scores = []
+        for train_index, test_index in skf.split(X, y):
+            probs = np.zeros((3, test_index.size, 2))
+            probs.fill(0.5)
+            for i in range(3):
+                if self.genotype_algorithms[i] == 1:
+                    features = np.nonzero(self.genotype_features[i])[0]
+                    X = self.data[:, features]
+                    y = self.data[:, -1]
+                    sc = StandardScaler()
+                    X = sc.fit_transform(X)
+                    X_train, X_test = X[train_index], X[test_index]
+                    y_train, y_test = y[train_index], y[test_index]
+                    clfs[i].fit(X_train, y_train)
+                    probs[i] = clfs[i].predict_proba(X_test)
+            scores.append(accuracy_score(y_test, self.combine(probs)))
+        print(np.mean(scores))
+
+    def combine(self, probs):
+        pred2 = np.average(probs, axis=0)
+        pred = np.argmax(pred2, axis=1)
+        pred += 1
+        return pred
