@@ -82,38 +82,3 @@ class GeneticAlgorithm:
                 text = (f"Iteracja {i} \nNajlepszy osobnik:\n {self.population[0].genotype_features},{self.population[0].genotype_algorithms}\nWyniki:"\
                         f"{self.population[0].scores}\nFunkcje celu:{self.population[0].fitness_scores}")
                 print(text)
-
-
-
-    # def save_charts(self, console):
-    #     fig, ax = plt.subplots(2, 1)
-    #     ax[0].set_title(f"Graf o liczbie wierzchołków: {self.graph.nodes}"
-    #                     f" i liczbie krawędzi: {self.graph.number_of_edges}")
-    #     ax[0].plot(self.best_scores)
-    #     ax[0].set_xlabel("Liczba iteracji")
-    #     ax[0].set_ylabel("Liczba kolorów")
-    #     ax[1].set_xlabel("Liczba iteracji")
-    #     ax[1].set_ylabel("Liczba punktów karnych")
-    #
-    #     ax[1].plot(self.lowest_penalties)
-    #     filename = str(Path(__file__).parent.parent) + \
-    #                (f"/saved_charts/{str(datetime.now())}.png")
-    #     fig.savefig(filename)
-    #     print(f"Wyeksportowano wykres do '{filename}'.")
-    #
-    # def export_results(self, parameters, console):
-    #     filename = str(Path(__file__).parent.parent) + \
-    #                f"/exported_results/{str(datetime.now())}.txt"
-    #     try:
-    #         with open(filename, 'w+') as f:
-    #             if parameters != "":
-    #                 for x, y in parameters.items():
-    #                     f.write("{}: {}\n".format(x, y))
-    #             f.write("\n\n")
-    #             for individual in self.population:
-    #                 f.write(str(individual))
-    #                 f.write('\n')
-    #         print(f"Wyeksportowano wyniki do 'exported_results/{filename}'.")
-    #         return True
-    #     except NotADirectoryError and FileNotFoundError:
-    #         return False

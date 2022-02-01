@@ -35,7 +35,7 @@ class Individual:
     def generate_genotype(self):
         self.genotype_features = np.random.randint(0, 2, self.genotype_features.shape)
         self.genotype_algorithms = np.random.randint(0, 2, self.genotype_algorithms.shape)
-        while np.nonzero(self.genotype_features)[0].size == 0:
+        while np.unique(np.nonzero(self.genotype_features)[0]).size < 3 :
             self.genotype_features = np.random.randint(0, 2, self.genotype_features.shape)
         while np.nonzero(self.genotype_algorithms)[0].size == 0:
             self.genotype_algorithms = np.random.randint(0, 2, self.genotype_algorithms.shape)
@@ -62,7 +62,7 @@ class Individual:
                 self.scores[i] = np.mean(scores)
         if np.nonzero(self.scores)[0].size > 0:
             self.fitness_scores[0] = np.sum(self.scores, where=self.genotype_algorithms.astype('bool'))
-            self.fitness_scores[1] = np.prod(self.scores, where=self.genotype_algorithms.astype('bool'))
+            self.fitness_scores[1] = np.prod(self.scores, where=self.genotype_algorithms.astype('bool')) * (0.5 ** (3-np.nonzero(self.genotype_algorithms)[0].size))
             self.fitness_scores[2] = np.max(self.scores[np.nonzero(self.scores)])
             self.fitness_scores[3] = np.min(self.scores[np.nonzero(self.scores)])
             self.fitness_scores[4] = np.median(self.scores[np.nonzero(self.scores)])
@@ -104,7 +104,6 @@ class Individual:
         sc = StandardScaler()
         X = sc.fit_transform(X)
         skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=1234)
-        clf = VotingClassifier(estimators=[('nb', clfs[0]), ('knn', clfs[1]), ('lda', clfs[2])])
         scores = []
         for train_index, test_index in skf.split(X, y):
             probs = np.zeros((3, test_index.size, 2))
@@ -120,11 +119,12 @@ class Individual:
                     y_train, y_test = y[train_index], y[test_index]
                     clfs[i].fit(X_train, y_train)
                     probs[i] = clfs[i].predict_proba(X_test)
-            scores.append(accuracy_score(y_test, self.combine(probs)))
-        print(np.mean(scores))
+            bias = np.max(y) - 1
+            scores.append(accuracy_score(y_test, self.combine(probs, bias)))
+        return(np.mean(scores))
 
-    def combine(self, probs):
+    def combine(self, probs, bias):
         pred2 = np.average(probs, axis=0)
         pred = np.argmax(pred2, axis=1)
-        pred += 1
+        pred += bias.astype(np.int64)
         return pred

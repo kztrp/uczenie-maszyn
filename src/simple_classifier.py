@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.feature_selection import f_classif
+from sklearn.feature_selection import f_classif, chi2
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
@@ -24,7 +24,7 @@ def main():
     y = data[:, -1]
     sc = StandardScaler()
     X = sc.fit_transform(X)
-    test_simple_classifiers(X, y)
+    print(test_simple_classifiers(X, y))
 
 def test_simple_classifiers(X, y):
     results = np.zeros((10, 5))
@@ -43,6 +43,7 @@ def simple_classifiers(X, y):
     for i in range(len(p_value)):
         if p_value[i] >= 0.05:
             significant_features.append(i)
+    print(significant_features)
     X = X[:, significant_features]
     clfs = (GaussianNB(), KNeighborsClassifier(n_neighbors=7), LinearDiscriminantAnalysis())
     for i, clf in enumerate(clfs):
@@ -64,16 +65,28 @@ def simple_classifiers(X, y):
     return(fitness_scores)
 
 def combine(X, y):
-    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=542)
+    skf = StratifiedKFold(n_splits=5, shuffle=True)
     clf = VotingClassifier(estimators=[('nb', GaussianNB()), ('knn', KNeighborsClassifier(n_neighbors=7)), ('lda', LinearDiscriminantAnalysis())], voting='soft')
     scores = []
+    clfs = (GaussianNB(), KNeighborsClassifier(n_neighbors=7), LinearDiscriminantAnalysis())
     for train_index, test_index in skf.split(X, y):
-        X_train, X_test = X[train_index], X[test_index]
-        y_train, y_test = y[train_index], y[test_index]
-        clf.fit(X_train, y_train)
-        predict = clf.predict(X_test)
-        scores.append(accuracy_score(y_test, predict))
+        probs = np.zeros((3, test_index.size, 2))
+        probs.fill(0.5)
+        for i in range(3):
+            X_train, X_test = X[train_index], X[test_index]
+            y_train, y_test = y[train_index], y[test_index]
+            clfs[i].fit(X_train, y_train)
+            probs[i] = clfs[i].predict_proba(X_test)
+        bias = np.max(y) - 1
+        scores.append(accuracy_score(y_test, combine_sample(probs, bias)))
     print(np.mean(scores))
+    return(np.mean(scores))
+
+def combine_sample(probs, bias):
+    pred2 = np.average(probs, axis=0)
+    pred = np.argmax(pred2, axis=1)
+    pred += bias.astype(np.int64)
+    return pred
 
 if __name__ == '__main__':
     main()
